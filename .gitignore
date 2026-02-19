@@ -1,0 +1,39 @@
+# Environment variables
+.env
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# VS Code
+.vscode/
+
+# Logs
+logs/
+*.log
+
+# Python
+__pycache__/
+.pytest_cache/
+*.pyc
+
+# Node (frontend)
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+'# Generated evaluation outputs
+*.jsonl
+
+# Graph artifacts (if generated)
+task_router_graph
+
+# Pytest
+.pytest_cache/
+
+# Logs
+logs/
+*.log
+'
