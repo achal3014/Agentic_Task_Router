@@ -1,3 +1,4 @@
+import os
 from langgraph.graph import StateGraph, END
 from app.state import AgentState
 from app.agents.router_agent import route_task
@@ -8,15 +9,13 @@ from app.safety.safety import safety_check
 from app.safety.suspicion_check import suspicion_check
 from app.llm import LLMServiceError
 
+# Read from environment - NO import yet
+GUARDRAILS_ENABLED = os.getenv("GUARDRAILS_ENABLED", "false").lower() == "true"
 
-# -------------------------
-# Nodes
-# -------------------------
 
 def safety_node(state: AgentState) -> AgentState:
     result = safety_check(state["user_input"])
 
-    # Tier-1 hard block
     if result["blocked"]:
         state["safety_flag"] = True
         state["safety_reason"] = result["reason"]
@@ -25,7 +24,6 @@ def safety_node(state: AgentState) -> AgentState:
         state["suspicion_flag"] = False
         return state
 
-    # Tier-2 soft suspicion
     state["safety_flag"] = False
     state["safety_reason"] = None
     state["suspicion_flag"] = suspicion_check(state["user_input"])
@@ -56,10 +54,24 @@ def router_node(state: AgentState) -> AgentState:
 def summarizer_node(state: AgentState) -> AgentState:
     try:
         content, tokens, model = summarize_text(state["user_input"])
+
+        if GUARDRAILS_ENABLED:
+            # Import only when needed
+            from app.guardrails.output_guard import validate_output
+
+            guard = validate_output(content)
+            if not guard["allowed"]:
+                state["response"] = "Response blocked due to output safety policy."
+                state["error"] = guard["reason"]
+                state["tokens_used"] = tokens
+                state["model_used"] = model
+                return state
+
         state["response"] = content
         state["tokens_used"] = tokens
         state["model_used"] = model
         state["error"] = None
+
     except LLMServiceError as e:
         state["response"] = "Service temporarily unavailable. Please try again."
         state["tokens_used"] = None
@@ -72,10 +84,24 @@ def summarizer_node(state: AgentState) -> AgentState:
 def qna_node(state: AgentState) -> AgentState:
     try:
         content, tokens, model = answer_question(state["user_input"])
+
+        if GUARDRAILS_ENABLED:
+            # Import only when needed
+            from app.guardrails.output_guard import validate_output
+
+            guard = validate_output(content)
+            if not guard["allowed"]:
+                state["response"] = "Response blocked due to output safety policy."
+                state["error"] = guard["reason"]
+                state["tokens_used"] = tokens
+                state["model_used"] = model
+                return state
+
         state["response"] = content
         state["tokens_used"] = tokens
         state["model_used"] = model
         state["error"] = None
+
     except LLMServiceError as e:
         state["response"] = "Service temporarily unavailable. Please try again."
         state["tokens_used"] = None
@@ -87,12 +113,25 @@ def qna_node(state: AgentState) -> AgentState:
 
 def translator_node(state: AgentState) -> AgentState:
     try:
-        content, tokens, model = translate_text(
-            state["user_input"])
+        content, tokens, model = translate_text(state["user_input"])
+
+        if GUARDRAILS_ENABLED:
+            # Import only when needed
+            from app.guardrails.output_guard import validate_output
+
+            guard = validate_output(content)
+            if not guard["allowed"]:
+                state["response"] = "Response blocked due to output safety policy."
+                state["error"] = guard["reason"]
+                state["tokens_used"] = tokens
+                state["model_used"] = model
+                return state
+
         state["response"] = content
         state["tokens_used"] = tokens
         state["model_used"] = model
         state["error"] = None
+
     except LLMServiceError as e:
         state["response"] = "Service temporarily unavailable. Please try again."
         state["tokens_used"] = None
@@ -104,30 +143,24 @@ def translator_node(state: AgentState) -> AgentState:
 
 def fallback_node(state: AgentState) -> AgentState:
     if state.get("safety_flag"):
-        state["task_type"] = "unsupported"
         state["response"] = "Request blocked due to safety restrictions."
-        state["error"] = "Blocked by Tier-1 safety rules."
+        state["error"] = state.get("error") or "Blocked by safety policy."
         return state
 
     if state.get("task_type") == "unsupported":
-        state["response"] = "This task is not supported by the system."
-        state["error"] = "Unsupported task."
+        state["response"] = state.get(
+            "response") or "This task is not supported by the system."
+        state["error"] = state.get("error") or "Unsupported task."
         return state
 
-    state["task_type"] = "unsupported"
     state["response"] = "An unexpected error occurred."
     state["error"] = "Fallback triggered due to unknown routing."
     return state
 
 
-# -------------------------
-# Graph Builder
-# -------------------------
-
 def build_graph():
     workflow = StateGraph(AgentState)
 
-    # Add nodes
     workflow.add_node("safety", safety_node)
     workflow.add_node("router", router_node)
     workflow.add_node("summarizer", summarizer_node)
@@ -135,12 +168,8 @@ def build_graph():
     workflow.add_node("translator", translator_node)
     workflow.add_node("fallback", fallback_node)
 
-    # Entry point
     workflow.set_entry_point("safety")
 
-    # --------------------------------
-    # Safety conditional routing
-    # --------------------------------
     workflow.add_conditional_edges(
         "safety",
         lambda state: "blocked" if state.get("safety_flag") else "safe",
@@ -150,9 +179,6 @@ def build_graph():
         }
     )
 
-    # --------------------------------
-    # Router conditional routing
-    # --------------------------------
     workflow.add_conditional_edges(
         "router",
         lambda state: state["task_type"],
@@ -164,7 +190,6 @@ def build_graph():
         }
     )
 
-    # End after execution
     workflow.add_edge("summarizer", END)
     workflow.add_edge("qna", END)
     workflow.add_edge("translator", END)
