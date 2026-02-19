@@ -1,3 +1,10 @@
+"""
+Router agent for task classification and request routing.
+
+This agent classifies user requests into one of the supported task types
+(summarize, qna, translate, unsupported) using an LLM.
+"""
+
 import json
 import os
 from app.models import RouterOutput
@@ -9,6 +16,32 @@ ROUTER_MODEL = os.getenv("GROQ_ROUTER_MODEL")
 
 
 def route_task(user_input: str) -> RouterOutput:
+    """
+    Classifies user request into appropriate task type.
+
+    Uses an LLM to analyze the request and determine which specialized
+    agent should handle it. Returns structured output with task type
+    and reasoning.
+
+    Task types:
+    - summarize: User wants text summarization
+    - qna: User asks question with provided document
+    - translate: User wants translation to English
+    - unsupported: Invalid/unsupported request or multiple conflicting tasks
+
+    Args:
+        user_input: Raw user request text
+
+    Returns:
+        RouterOutput containing task_type and reasoning
+
+    Raises:
+        Returns UNSUPPORTED_TASK if JSON parsing fails or task type is invalid
+
+    Example:
+        >>> route_task("Summarize this: AI is...")
+        RouterOutput(task_type="summarize", reasoning="Explicit summarize keyword")
+    """
     full_prompt = f"""
 {ROUTER_PROMPT}
 

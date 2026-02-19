@@ -1,3 +1,10 @@
+"""
+LangGraph workflow orchestration for the document assistant system.
+
+This module defines the state machine that routes user requests through safety checks,
+task routing, and specialized agents (summarizer, QnA, translator).
+"""
+
 import os
 from langgraph.graph import StateGraph, END
 from app.state import AgentState
@@ -14,6 +21,18 @@ GUARDRAILS_ENABLED = os.getenv("GUARDRAILS_ENABLED", "false").lower() == "true"
 
 
 def safety_node(state: AgentState) -> AgentState:
+    """
+    Performs Tier-1 safety checks on user input.
+
+    Blocks requests containing medical advice, legal advice, financial advice,
+    or other restricted topics based on keyword matching.
+
+    Args:
+        state: Current agent state containing user_input
+
+    Returns:
+        Updated state with safety_flag set if blocked, or suspicion_flag if suspicious
+    """
     result = safety_check(state["user_input"])
 
     if result["blocked"]:
@@ -32,6 +51,21 @@ def safety_node(state: AgentState) -> AgentState:
 
 
 def router_node(state: AgentState) -> AgentState:
+    """
+    Routes user request to appropriate specialized agent.
+
+    Uses an LLM to classify the request into one of:
+    - summarize: Text summarization
+    - qna: Question answering based on document
+    - translate: Language translation to English
+    - unsupported: Invalid or unsupported request
+
+    Args:
+        state: Current agent state containing user_input
+
+    Returns:
+        Updated state with task_type and routing_reasoning
+    """
     try:
         router_output = route_task(state["user_input"])
 
@@ -52,6 +86,20 @@ def router_node(state: AgentState) -> AgentState:
 
 
 def summarizer_node(state: AgentState) -> AgentState:
+    """
+    Generates concise summaries of provided text.
+
+    Uses an LLM to create clear, beginner-friendly summaries focusing on
+    main ideas and key points without adding interpretations.
+
+    Optionally validates output through guardrails if GUARDRAILS_ENABLED=true.
+
+    Args:
+        state: Current agent state containing user_input
+
+    Returns:
+        Updated state with response, tokens_used, and model_used
+    """
     try:
         content, tokens, model = summarize_text(state["user_input"])
 
@@ -82,6 +130,20 @@ def summarizer_node(state: AgentState) -> AgentState:
 
 
 def qna_node(state: AgentState) -> AgentState:
+    """
+    Answers questions based strictly on provided documentation.
+
+    Uses an LLM to answer questions using ONLY the provided document,
+    without adding external knowledge or making recommendations.
+
+    Optionally validates output through guardrails if GUARDRAILS_ENABLED=true.
+
+    Args:
+        state: Current agent state containing user_input
+
+    Returns:
+        Updated state with response, tokens_used, and model_used
+    """
     try:
         content, tokens, model = answer_question(state["user_input"])
 
@@ -112,6 +174,20 @@ def qna_node(state: AgentState) -> AgentState:
 
 
 def translator_node(state: AgentState) -> AgentState:
+    """
+    Translates text from any language to English.
+
+    Uses an LLM to perform mechanical translation while preserving meaning,
+    tone, and structure. Only outputs English translations.
+
+    Optionally validates output through guardrails if GUARDRAILS_ENABLED=true.
+
+    Args:
+        state: Current agent state containing user_input
+
+    Returns:
+        Updated state with response, tokens_used, and model_used
+    """
     try:
         content, tokens, model = translate_text(state["user_input"])
 
@@ -142,6 +218,20 @@ def translator_node(state: AgentState) -> AgentState:
 
 
 def fallback_node(state: AgentState) -> AgentState:
+    """
+    Handles unsupported requests and error cases.
+
+    Provides appropriate error messages for:
+    - Safety-blocked requests
+    - Unsupported task types
+    - Unexpected errors
+
+    Args:
+        state: Current agent state
+
+    Returns:
+        Updated state with appropriate error response
+    """
     if state.get("safety_flag"):
         state["response"] = "Request blocked due to safety restrictions."
         state["error"] = state.get("error") or "Blocked by safety policy."
@@ -159,6 +249,18 @@ def fallback_node(state: AgentState) -> AgentState:
 
 
 def build_graph():
+    """
+    Constructs and compiles the LangGraph state machine workflow.
+
+    Defines the complete execution graph:
+    1. safety → Check input safety
+    2. router → Classify task type
+    3. [summarizer|qna|translator] → Execute specialized agent
+    4. fallback → Handle errors/unsupported
+
+    Returns:
+        Compiled LangGraph workflow ready for execution
+    """
     workflow = StateGraph(AgentState)
 
     workflow.add_node("safety", safety_node)
