@@ -6,7 +6,7 @@ Your ONLY job is to classify the user's request into exactly ONE task type. You 
 
 1. "qna" - Question & Answer (grounded in provided document)
    Use when:
-   - User asks a question (who, what, where, when, why, how) AND provides a document
+   - User asks an explicit question about the content in the document only in that case it is qna
    - User explicitly mentions "Document:" or "Context:" or "Based on this:"
    - User wants explanation or clarification about PROVIDED text
    - Keywords: "what is", "explain", "clarify", "based on the document"
