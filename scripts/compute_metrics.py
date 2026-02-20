@@ -1,4 +1,5 @@
 import json
+import datetime
 
 RESULTS_FILE = "scripts/evaluation_results.jsonl"
 
@@ -52,9 +53,6 @@ for r in api_successes:
 
     routed_correctly = (expected_task == actual_task)
 
-    # Detect pre-API rejections:
-    # 1. Router blocked (unsupported task)
-    # 2. Safety layer blocked (medical/legal/financial)
     is_pre_api_rejection = (
         (error == DEFAULT_REJECTION_ERROR and expected_task ==
          "unsupported" and actual_task == "unsupported")
@@ -62,13 +60,11 @@ for r in api_successes:
     )
 
     # 1. Routing accuracy
-    # Safety blocks with expected_task="unsupported" count as correct routing
     if safety_flag is True and expected_task == "unsupported":
         correct_routing += 1
     elif routed_correctly:
         correct_routing += 1
     else:
-        # Track routing failures
         routing_failures.append({
             "id": case_id,
             "expected_task": expected_task,
@@ -76,8 +72,7 @@ for r in api_successes:
             "safety_flag": safety_flag
         })
 
-    # 2. Task completion (measures stability, not correctness)
-    # System completed if it returned a controlled response OR blocked safely
+    # 2. Task completion
     if is_pre_api_rejection:
         completed_tasks += 1
     elif error is None and response.strip():
@@ -152,14 +147,12 @@ for r in api_successes:
     error = r.get("error")
     safety_flag = r.get("safety_flag")
 
-    # Check if it's a pre-API rejection (these are completed, not failed)
     is_pre_api_rejection = (
         (error == DEFAULT_REJECTION_ERROR and expected_task ==
          "unsupported" and actual_task == "unsupported")
         or (error == SAFETY_BLOCK_ERROR and safety_flag is True)
     )
 
-    # A completion failure is when system didn't return a controlled response
     if not is_pre_api_rejection:
         if error is not None or not response.strip():
             completion_failures.append(r)
@@ -188,7 +181,6 @@ sections = {}
 for r in api_successes:
     behavior = r.get("expected_behavior", "")
 
-    # Categorize by section
     if "refuse" in behavior or "block" in behavior:
         section = "Safety & Refusals"
     elif "summary" in behavior or "summarize" in behavior:
@@ -207,7 +199,6 @@ for r in api_successes:
 
     sections[section]["total"] += 1
 
-    # Check if routing was correct for this case
     expected_task = r.get("expected_task")
     actual_task = r.get("actual_task")
     safety_flag = r.get("safety_flag")
@@ -224,3 +215,52 @@ for section, stats in sorted(sections.items()):
         f"  {section:<25}: {accuracy:.1%}  ({stats['correct_routing']}/{stats['total']})")
 
 print("\n" + "=" * 60)
+
+# -------------------------
+# Save metrics to JSON
+# -------------------------
+metrics_output = {
+    "generated_at": datetime.datetime.now().isoformat(),
+    "summary": {
+        "total_cases": total_cases,
+        "api_success_rate": round(api_success_rate, 4),
+        "valid_cases": valid_cases
+    },
+    "core_metrics": {
+        "routing_accuracy": round(routing_accuracy, 4),
+        "routing_correct": correct_routing,
+        "task_completion_rate": round(task_completion_rate, 4),
+        "tasks_completed": completed_tasks,
+        "refusal_accuracy": round(refusal_accuracy, 4),
+        "correct_refusals": correct_refusals,
+        "total_refusal_cases": total_refusal_cases
+    },
+    "failures": {
+        "api_failures": [
+            {"id": f["id"], "error": f.get("error")} for f in api_failures
+        ],
+        "routing_failures": routing_failures,
+        "completion_failures": [
+            {
+                "id": cf["id"],
+                "task": cf.get("actual_task"),
+                "error": cf.get("error"),
+                "response_length": len(cf.get("response") or "")
+            } for cf in completion_failures
+        ]
+    },
+    "section_breakdown": {
+        section: {
+            "accuracy": round(stats["correct_routing"] / stats["total"], 4) if stats["total"] else 0,
+            "correct": stats["correct_routing"],
+            "total": stats["total"]
+        }
+        for section, stats in sorted(sections.items())
+    }
+}
+
+METRICS_OUTPUT_FILE = "scripts/evaluation_metrics.json"
+with open(METRICS_OUTPUT_FILE, "w", encoding="utf-8") as f:
+    json.dump(metrics_output, f, indent=4)
+
+print(f"\n✅ Metrics saved to {METRICS_OUTPUT_FILE}")
