@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from app.graph import build_graph
 from app.models import APIRequest, APIResponse
 from app.logger import log_decision
+from app.configs import ENABLE_LOGGING
 from fastapi.middleware.cors import CORSMiddleware
 
 
@@ -37,7 +38,8 @@ def route_request(request: APIRequest):
     latency_ms = (end_time - start_time) * 1000
 
     # Log final decision
-    log_decision(result, latency_ms)
+    if ENABLE_LOGGING:
+        log_decision(result, latency_ms)
 
     return APIResponse(
         task_type=result.get("task_type", "unsupported"),

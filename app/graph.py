@@ -15,9 +15,9 @@ from app.agents.translator_agent import translate_text
 from app.safety.safety import safety_check
 from app.safety.suspicion_check import suspicion_check
 from app.llm import LLMServiceError
-
+from app.configs import ENABLE_TIER2
 # Read from environment - NO import yet
-GUARDRAILS_ENABLED = os.getenv("GUARDRAILS_ENABLED", "false").lower() == "true"
+GUARDRAILS_ENABLED = ENABLE_TIER2
 
 
 def safety_node(state: AgentState) -> AgentState:

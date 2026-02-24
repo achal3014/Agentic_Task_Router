@@ -6,13 +6,12 @@ This agent classifies user requests into one of the supported task types
 """
 
 import json
-import os
 from app.models import RouterOutput
 from app.constants.tasks import SUPPORTED_TASKS, UNSUPPORTED_TASK
 from app.llm import call_llm
 from app.prompts.router_prompt import ROUTER_PROMPT
 
-ROUTER_MODEL = os.getenv("GROQ_ROUTER_MODEL")
+from app.configs import ROUTER_MODEL
 
 
 def route_task(user_input: str) -> RouterOutput:

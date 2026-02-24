@@ -2,12 +2,13 @@ import os
 from dotenv import load_dotenv
 from tenacity import retry, stop_after_attempt, wait_exponential
 from groq import Groq
+from app.configs import MAIN_MODEL, FALLBACK_MODEL, TEMPERATURE, MAX_TOKENS
 
 load_dotenv()
 
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-groq_model = os.getenv("GROQ_MAIN_MODEL")
-groq_fallback_model = os.getenv("GROQ_FALLBACK_MODEL")
+groq_model = MAIN_MODEL
+groq_fallback_model = FALLBACK_MODEL
 
 
 class LLMServiceError(Exception):
@@ -40,12 +41,9 @@ def _invoke_groq(
     }
 
 
-def call_llm(
-    prompt: str,
-    model: str | None = None,
-    temperature: float = 0,
-    max_tokens: int = 300
-) -> dict:
+def call_llm(prompt: str, model=None, temperature=None, max_tokens=None) -> dict:
+    temperature = temperature if temperature is not None else TEMPERATURE
+    max_tokens = max_tokens if max_tokens is not None else MAX_TOKENS
     """
     Calls Groq with fallback support.
     """
