@@ -37,3 +37,6 @@ task_router_graph
 logs/
 *.log
 '
+
+# Powerpoint
+pptx/

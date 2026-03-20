@@ -1,4 +1,10 @@
-from typing import TypedDict, Optional
+from typing import TypedDict, Optional, List, Annotated
+import operator
+
+
+def keep_last(a, b):
+    """Always keep the latest value — used for all scalar fields."""
+    return b if b is not None else a
 
 
 class AgentState(TypedDict):
@@ -8,7 +14,12 @@ class AgentState(TypedDict):
     routing_reasoning: str
     response: str
     error: Optional[str]
-    safety_flag: bool          # hard block
-    suspicion_flag: bool     # soft semantic flag
+    safety_flag: bool
+    suspicion_flag: bool
     model_used: Optional[str]
     tokens_used: Optional[int]
+    confidence: Annotated[Optional[float], keep_last]
+    escalation_confirmed: Annotated[Optional[bool], keep_last]
+    escalation_offer: Annotated[Optional[bool], keep_last]
+    session_id: Annotated[Optional[str], keep_last]
+    conversation_history: Annotated[Optional[List[dict]], keep_last]

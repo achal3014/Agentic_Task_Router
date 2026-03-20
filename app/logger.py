@@ -10,10 +10,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOG_PATH = os.path.join(BASE_DIR, "logs", "decisions.json")
 
 
-def log_decision(
-    state: AgentState,
-    latency_ms: int
-) -> Dict[str, Any]:
+def log_decision(state: AgentState, latency_ms: int) -> Dict[str, Any]:
     """
     Generates a structured audit log for a single request.
     """
@@ -21,22 +18,21 @@ def log_decision(
     log_entry = {
         "timestamp": datetime.utcnow().isoformat(),
         "request_id": str(uuid.uuid4()),
-
+        "session_id": state.get("session_id"),  # ← add
         "user_input": state.get("user_input"),
         "task_type": state.get("task_type"),
         "safety_reason": state.get("safety_reason"),
         "routing_reasoning": state.get("routing_reasoning"),
-
-
+        "confidence": state.get("confidence"),
+        "escalation_offer": state.get("escalation_offer"),  # ← add
+        "escalation_confirmed": state.get("escalation_confirmed"),  # ← add
         "safety_flag": state.get("safety_flag"),
         "suspicion_flag": state.get("suspicion_flag"),
-
         "response": state.get("response"),
         "error": state.get("error"),
-
         "model_used": state.get("model_used"),
         "tokens_used": state.get("tokens_used"),
-        "latency_ms": latency_ms
+        "latency_ms": latency_ms,
     }
 
     # Ensure logs directory exists

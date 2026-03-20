@@ -1,8 +1,11 @@
 """
 Router agent for task classification and request routing.
 
-This agent classifies user requests into one of the supported task types
-(summarize, qna, translate, unsupported) using an LLM.
+Classifies user requests into one of:
+summarize, qna, translate, research, unsupported.
+
+Uses LLM for intelligent classification with confidence scoring.
+Reads conversation history from state for context-aware routing.
 """
 
 import json
@@ -10,68 +13,85 @@ from app.models import RouterOutput
 from app.constants.tasks import SUPPORTED_TASKS, UNSUPPORTED_TASK
 from app.llm import call_llm
 from app.prompts.router_prompt import ROUTER_PROMPT
+from app.configs import (
+    ROUTER_MODEL,
+    ROUTER_TEMPERATURE,
+    ROUTER_MAX_TOKENS,
+    HISTORY_TURNS,
+)
 
-from app.configs import ROUTER_MODEL
 
-
-def route_task(user_input: str) -> RouterOutput:
+def route_task(state: dict) -> RouterOutput:
     """
     Classifies user request into appropriate task type.
-
-    Uses an LLM to analyze the request and determine which specialized
-    agent should handle it. Returns structured output with task type
-    and reasoning.
-
-    Task types:
-    - summarize: User wants text summarization
-    - qna: User asks question with provided document
-    - translate: User wants translation to English
-    - unsupported: Invalid/unsupported request or multiple conflicting tasks
+    Reads conversation history from state for context-aware routing.
 
     Args:
-        user_input: Raw user request text
+        state: Full agent state containing user_input and conversation_history
 
     Returns:
-        RouterOutput containing task_type and reasoning
-
-    Raises:
-        Returns UNSUPPORTED_TASK if JSON parsing fails or task type is invalid
-
-    Example:
-        >>> route_task("Summarize this: AI is...")
-        RouterOutput(task_type="summarize", reasoning="Explicit summarize keyword")
+        RouterOutput with task_type, reasoning, confidence
     """
+    user_input = state.get("user_input", "")
+    history = state.get("conversation_history") or []
+
+    # Build history context string if history exists
+    history_context = ""
+    if history:
+        recent = history[-HISTORY_TURNS:]
+        lines = "\n".join(f"{t['role'].upper()}: {t['content'][:200]}" for t in recent)
+        history_context = f"""
+Recent conversation (use this to understand follow-up intent):
+{lines}
+
+"""
+
     full_prompt = f"""
 {ROUTER_PROMPT}
 
-User request:
+{history_context}User request:
 {user_input}
 """
 
-    # Override model ONLY here
-    llm_response = call_llm(
-        prompt=full_prompt,
-        model=ROUTER_MODEL,
-        temperature=0,
-        max_tokens=100
-    )
-
-    raw_response = llm_response["content"]
-
     try:
+        llm_response = call_llm(
+            prompt=full_prompt,
+            model=ROUTER_MODEL,
+            temperature=ROUTER_TEMPERATURE,
+            max_tokens=ROUTER_MAX_TOKENS,
+        )
+
+        raw_response = llm_response.get("content", "").strip()
+
+        # Handle markdown-wrapped JSON
+        if raw_response.startswith("```"):
+            parts = raw_response.split("```")
+            if len(parts) > 1:
+                raw_response = parts[1]
+                if raw_response.startswith("json"):
+                    raw_response = raw_response[4:]
+            raw_response = raw_response.strip()
+
         parsed = json.loads(raw_response)
         validated = RouterOutput(**parsed)
 
         if validated.task_type not in SUPPORTED_TASKS:
             return RouterOutput(
                 task_type=UNSUPPORTED_TASK,
-                reasoning="Router returned unsupported task."
+                reasoning="Router returned unsupported task.",
+                confidence=validated.confidence,
             )
 
         return validated
 
-    except Exception:
+    except Exception as e:
+        print("ROUTER ERROR")
+        print("User Input:", user_input)
+        print("Raw Response:", raw_response if "raw_response" in locals() else "N/A")
+        print("Error:", str(e))
+
         return RouterOutput(
             task_type=UNSUPPORTED_TASK,
-            reasoning="Invalid JSON from router model."
+            reasoning="Router failed to parse response.",
+            confidence=0.0,
         )
