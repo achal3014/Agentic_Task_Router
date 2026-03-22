@@ -10,7 +10,7 @@ from app.prompts.prompt_builder import build_prompt
 from app.llm import call_llm
 
 
-def answer_question(user_input: str) -> tuple[str, int | None, str]:
+def answer_question(state: dict) -> tuple[str, int, str]:
     """
     Answers a question based strictly on provided documentation.
 
@@ -27,8 +27,21 @@ def answer_question(user_input: str) -> tuple[str, int | None, str]:
         Tuple of (answer_text, tokens_used, model_name)
 
     """
-    prompt = build_prompt(QNA_PROMPT, user_input)
+
+    user_input = state.get("user_input", "")
+    retrieved_context = state.get("retrieved_context", "")
+
+    context_block = ""
+    if retrieved_context:
+        context_block = f"""
+            Relevant prior context from memory:
+            {retrieved_context}
+
+            Use this context to give a more informed answer if relevant.
+            """
+
+    prompt = build_prompt(QNA_PROMPT, f"{context_block}{user_input}")
 
     response = call_llm(prompt=prompt)
 
-    return response["content"], response["tokens"], response["model"]
+    return response["content"], response.get("tokens_used"), response.get("model")

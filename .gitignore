@@ -40,3 +40,6 @@ logs/
 
 # Powerpoint
 pptx/
+
+# Vector Store
+vector_store/

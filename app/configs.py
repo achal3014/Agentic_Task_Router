@@ -13,7 +13,9 @@ FALLBACK_MODEL = config["LLM"]["FALLBACK_MODEL"]
 ROUTER_MODEL = config["LLM"]["ROUTER_MODEL"]
 ROUTER_TEMPERATURE = float(config["LLM"]["ROUTER_TEMPERATURE"])
 ROUTER_MAX_TOKENS = int(config["LLM"]["ROUTER_MAX_TOKENS"])
-
+RESEARCH_TEMPERATURE = float(config["LLM"]["RESEARCH_TEMPERATURE"])
+RESEARCH_MAX_TOKENS = int(config["LLM"]["RESEARCH_MAX_TOKENS"])
+TOOL_USE_MODEL = config["LLM"]["TOOL_USE_MODEL"]
 
 # ─────────────────────────────────────────────
 # Safety
@@ -28,6 +30,7 @@ ENABLE_LOGGING = config["LOGGING"].getboolean("ENABLE_LOGGING")
 # ─────────────────────────────────────────────
 # Memory
 # ─────────────────────────────────────────────
+EMBEDDING_MODEL = config["MEMORY"]["EMBEDDING_MODEL"]
 ENABLE_MEMORY = config["MEMORY"].getboolean("ENABLE_MEMORY")
 REDIS_HOST = config["MEMORY"]["REDIS_HOST"]
 REDIS_PORT = int(config["MEMORY"]["REDIS_PORT"])

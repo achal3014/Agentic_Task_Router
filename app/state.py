@@ -23,3 +23,6 @@ class AgentState(TypedDict):
     escalation_offer: Annotated[Optional[bool], keep_last]
     session_id: Annotated[Optional[str], keep_last]
     conversation_history: Annotated[Optional[List[dict]], keep_last]
+    retrieved_context: Annotated[Optional[str], keep_last]
+    tools_called: Annotated[Optional[List[str]], keep_last]
+    cost_usd: Annotated[Optional[float], lambda a, b: round((a or 0.0) + (b or 0.0), 6)]

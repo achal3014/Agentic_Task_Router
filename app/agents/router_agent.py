@@ -21,7 +21,7 @@ from app.configs import (
 )
 
 
-def route_task(state: dict) -> RouterOutput:
+def route_task(state: dict) -> tuple[RouterOutput, int | None]:
     """
     Classifies user request into appropriate task type.
     Reads conversation history from state for context-aware routing.
@@ -30,7 +30,7 @@ def route_task(state: dict) -> RouterOutput:
         state: Full agent state containing user_input and conversation_history
 
     Returns:
-        RouterOutput with task_type, reasoning, confidence
+        Tuple of (RouterOutput, tokens_used)
     """
     user_input = state.get("user_input", "")
     history = state.get("conversation_history") or []
@@ -53,6 +53,8 @@ Recent conversation (use this to understand follow-up intent):
 {user_input}
 """
 
+    raw_response = "N/A"
+
     try:
         llm_response = call_llm(
             prompt=full_prompt,
@@ -62,6 +64,7 @@ Recent conversation (use this to understand follow-up intent):
         )
 
         raw_response = llm_response.get("content", "").strip()
+        tokens_used = llm_response.get("tokens_used")
 
         # Handle markdown-wrapped JSON
         if raw_response.startswith("```"):
@@ -80,18 +83,18 @@ Recent conversation (use this to understand follow-up intent):
                 task_type=UNSUPPORTED_TASK,
                 reasoning="Router returned unsupported task.",
                 confidence=validated.confidence,
-            )
+            ), tokens_used
 
-        return validated
+        return validated, tokens_used
 
     except Exception as e:
         print("ROUTER ERROR")
         print("User Input:", user_input)
-        print("Raw Response:", raw_response if "raw_response" in locals() else "N/A")
+        print("Raw Response:", raw_response)
         print("Error:", str(e))
 
         return RouterOutput(
             task_type=UNSUPPORTED_TASK,
             reasoning="Router failed to parse response.",
             confidence=0.0,
-        )
+        ), None

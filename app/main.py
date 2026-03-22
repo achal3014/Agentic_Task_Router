@@ -35,10 +35,13 @@ def route_request(request: APIRequest):
         "safety_reason": None,
         "model_used": None,
         "tokens_used": None,
+        "cost_usd": None,
         "confidence": None,
         "escalation_confirmed": None,
         "escalation_offer": None,
         "conversation_history": None,
+        "retrieved_context": None,
+        "tools_called": None,
     }
 
     start_time = time.time()
@@ -59,10 +62,12 @@ def route_request(request: APIRequest):
             or result.get("safety_reason")
             or "Request blocked by safety policy."
         ),
+        cost_usd=result.get("cost_usd"),
         confidence=result.get("confidence"),
         error=result.get("error"),
         safety_flag=result.get("safety_flag", False),
         suspicion_flag=result.get("suspicion_flag", False),
         escalation_offer=result.get("escalation_offer"),
         escalation_confirmed=result.get("escalation_confirmed"),
+        tools_called=result.get("tools_called"),
     )

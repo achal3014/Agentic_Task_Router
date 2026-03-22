@@ -15,10 +15,9 @@ from app.agents.translator_agent import translate_text
 from app.agents.research_agent import run_research
 from app.safety.safety import safety_check
 from app.safety.suspicion_check import suspicion_check
+from app.cost.tracker import accumulate_cost, calculate_cost
 from app.llm import LLMServiceError
-from app.configs import ENABLE_TIER2
-from app.configs import ENABLE_MEMORY
-from app.memory.redis_store import read_history, write_turn
+from app.configs import ENABLE_TIER2, ENABLE_MEMORY, ROUTER_MODEL
 
 # Read from environment - NO import yet
 GUARDRAILS_ENABLED = ENABLE_TIER2
@@ -61,16 +60,35 @@ def memory_read_node(state: AgentState) -> AgentState:
     """
     if not ENABLE_MEMORY:
         state["conversation_history"] = []
+        state["retrieved_context"] = ""
         return state
 
     session_id = state.get("session_id")
     if not session_id:
         state["conversation_history"] = []
+        state["retrieved_context"] = ""
         return state
+
+    # Short-term — Redis
+    from app.memory.redis_store import (
+        read_history,
+    )  # Heavy imports so defined inside function
 
     history = read_history(session_id)
     state["conversation_history"] = history
     print(f"[memory] Read {len(history)} turns for session {session_id}")
+
+    # Long-term — ChromaDB
+    from app.memory.vector_store import (
+        retrieve_context,
+    )  # Heavy imports so defined inside function
+
+    user_input = state.get("user_input", "")
+    context = retrieve_context(user_input)
+    state["retrieved_context"] = context
+    if context:
+        print(f"[memory] Retrieved prior context ({len(context)} chars)")
+
     return state
 
 
@@ -92,11 +110,15 @@ def router_node(state: AgentState) -> AgentState:
         Updated state with task_type and routing_reasoning
     """
     try:
-        router_output = route_task(state)
+        router_output, router_tokens = route_task(state)
 
         state["task_type"] = router_output.task_type
         state["routing_reasoning"] = router_output.reasoning
         state["confidence"] = router_output.confidence
+
+        state["cost_usd"] = accumulate_cost(
+            state.get("cost_usd"), calculate_cost(ROUTER_MODEL, router_tokens)
+        )
 
         if router_output.task_type not in ["summarize", "qna", "translate", "research"]:
             state["task_type"] = "unsupported"
@@ -151,11 +173,17 @@ def summarizer_node(state: AgentState) -> AgentState:
         Updated state with response, tokens_used, and model_used
     """
     try:
-        content, tokens, model = summarize_text(state["user_input"])
+        content, tokens, model = summarize_text(state)
+
+        state["cost_usd"] = accumulate_cost(
+            state.get("cost_usd"), calculate_cost(model, tokens)
+        )
 
         if GUARDRAILS_ENABLED:
             # Import only when needed
-            from app.guardrails.output_guard import validate_output
+            from app.guardrails.output_guard import (
+                validate_output,
+            )  # Heavy imports so defined inside function
 
             guard = validate_output(content)
             if not guard["allowed"]:
@@ -194,7 +222,11 @@ def qna_node(state: AgentState) -> AgentState:
         Updated state with response, tokens_used, and model_used
     """
     try:
-        content, tokens, model = answer_question(state["user_input"])
+        content, tokens, model = answer_question(state)
+
+        state["cost_usd"] = accumulate_cost(
+            state.get("cost_usd"), calculate_cost(model, tokens)
+        )
 
         if GUARDRAILS_ENABLED:
             # Import only when needed
@@ -278,6 +310,10 @@ def translator_node(state: AgentState) -> AgentState:
     try:
         content, tokens, model = translate_text(state["user_input"])
 
+        state["cost_usd"] = accumulate_cost(
+            state.get("cost_usd"), calculate_cost(model, tokens)
+        )
+
         if GUARDRAILS_ENABLED:
             # Import only when needed
             from app.guardrails.output_guard import validate_output
@@ -317,7 +353,11 @@ def research_node(state: AgentState) -> AgentState:
         Updated state with response, tokens_used, and model_used
     """
     try:
-        content, tokens, model = run_research(state)
+        content, tokens, model, tools = run_research(state)
+
+        state["cost_usd"] = accumulate_cost(
+            state.get("cost_usd"), calculate_cost(model, tokens)
+        )
 
         if GUARDRAILS_ENABLED:
             from app.guardrails.output_guard import validate_output
@@ -328,18 +368,21 @@ def research_node(state: AgentState) -> AgentState:
                 state["error"] = guard["reason"]
                 state["tokens_used"] = tokens
                 state["model_used"] = model
+                state["tools_called"] = tools
                 return state
 
         state["task_type"] = "research"
         state["response"] = content
         state["tokens_used"] = tokens
         state["model_used"] = model
+        state["tools_called"] = tools
         state["error"] = None
 
     except LLMServiceError as e:
         state["response"] = "Service temporarily unavailable. Please try again."
         state["tokens_used"] = None
         state["model_used"] = None
+        state["tools_called"] = None
         state["error"] = str(e)
 
     return state
@@ -390,19 +433,33 @@ def memory_write_node(state: AgentState) -> AgentState:
     if not session_id:
         return state
 
-    # Don't store blocked or error responses
     if state.get("safety_flag") or state.get("task_type") == "unsupported":
         return state
 
     response = state.get("response", "").strip()
     user_input = state.get("user_input", "").strip()
+    task_type = state.get("task_type", "")
+    error = state.get("error")
+
+    # Redis — always write turn
+    from app.memory.redis_store import (
+        write_turn,
+    )  # Heavy imports so defined inside function
 
     if user_input:
         write_turn(session_id, "user", user_input)
     if response:
         write_turn(session_id, "assistant", response)
-
     print(f"[memory] Wrote turn for session {session_id}")
+
+    # ChromaDB — only write meaningful outputs
+    from app.memory.manager import should_store_in_vector
+    from app.memory.vector_store import store_output
+
+    if should_store_in_vector(task_type, response, error):
+        store_output(session_id, task_type, user_input, response)
+        print(f"[memory] Stored {task_type} output in vector store")
+
     return state
 
 

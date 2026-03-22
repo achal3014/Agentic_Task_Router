@@ -35,4 +35,4 @@ def translate_text(user_input: str) -> tuple[str, int, str]:
 
     response = call_llm(prompt=prompt)
 
-    return response["content"], response["tokens"], response["model"]
+    return response["content"], response.get("tokens_used"), response.get("model")
