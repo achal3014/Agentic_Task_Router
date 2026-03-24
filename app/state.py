@@ -1,5 +1,4 @@
 from typing import TypedDict, Optional, List, Annotated
-import operator
 
 
 def keep_last(a, b):
@@ -26,3 +25,5 @@ class AgentState(TypedDict):
     retrieved_context: Annotated[Optional[str], keep_last]
     tools_called: Annotated[Optional[List[str]], keep_last]
     cost_usd: Annotated[Optional[float], lambda a, b: round((a or 0.0) + (b or 0.0), 6)]
+    document: Annotated[Optional[str], keep_last]  # extracted document text
+    has_document: Annotated[Optional[bool], keep_last]  # flag for router guard

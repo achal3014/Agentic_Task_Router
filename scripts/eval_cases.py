@@ -1,20 +1,25 @@
+import uuid
+
+ESCALATION_SESSION_ID = str(uuid.uuid4())  # generates valid UUID at import time
+MEMORY_SESSION_ID = str(uuid.uuid4())
+
 EVAL_CASES = [
     # ================================================================
     # SECTION 1: BASIC PASS CASES (4 cases)
     # ================================================================
     {
         "id": 1,
-        "query": "Summarize the following text: Artificial Intelligence enables machines to learn from data and make decisions.",
-        "expected_task": "summarize",
-        "expected_behavior": "valid_summary",
+        "query": "What is machine learning? Document: Machine learning is a subset of AI that enables systems to learn from data without explicit programming.",
+        "expected_task": "qna",
+        "expected_behavior": "answer_grounded_in_document",
         "section": "basic_pass",
         "session_id": None,
     },
     {
         "id": 2,
-        "query": "What is machine learning? Document: Machine learning is a subset of AI that enables systems to learn from data without explicit programming.",
-        "expected_task": "qna",
-        "expected_behavior": "answer_grounded_in_document",
+        "query": "Summarize the following text: Artificial Intelligence enables machines to learn from data and make decisions.",
+        "expected_task": "summarize",
+        "expected_behavior": "valid_summary",
         "section": "basic_pass",
         "session_id": None,
     },
@@ -441,7 +446,7 @@ EVAL_CASES = [
         "expected_task": "qna",
         "expected_behavior": "answer_from_training_knowledge_with_escalation_offer",
         "section": "escalation_flow",
-        "session_id": "ESCALATION_SESSION",
+        "session_id": ESCALATION_SESSION_ID,
     },
     {
         "id": 52,
@@ -449,7 +454,7 @@ EVAL_CASES = [
         "expected_task": "research",
         "expected_behavior": "escalation_confirmed_routes_to_research",
         "section": "escalation_flow",
-        "session_id": "ESCALATION_SESSION",
+        "session_id": ESCALATION_SESSION_ID,
     },
     {
         "id": 53,
@@ -457,7 +462,7 @@ EVAL_CASES = [
         "expected_task": "summarize",
         "expected_behavior": "summarize_conversation_from_redis_history",
         "section": "escalation_flow",
-        "session_id": "ESCALATION_SESSION",
+        "session_id": ESCALATION_SESSION_ID,
     },
     # ================================================================
     # SECTION 13: MEMORY - CROSS SESSION (3 cases — persistent session)
@@ -468,7 +473,7 @@ EVAL_CASES = [
         "expected_task": "qna",
         "expected_behavior": "answer_stored_in_memory",
         "section": "memory_cross_session",
-        "session_id": "MEMORY_SESSION",
+        "session_id": MEMORY_SESSION_ID,
     },
     {
         "id": 55,
@@ -476,7 +481,7 @@ EVAL_CASES = [
         "expected_task": "qna",
         "expected_behavior": "answer_uses_prior_context_from_memory",
         "section": "memory_cross_session",
-        "session_id": "MEMORY_SESSION",
+        "session_id": MEMORY_SESSION_ID,
     },
     {
         "id": 56,
@@ -484,7 +489,7 @@ EVAL_CASES = [
         "expected_task": "research",
         "expected_behavior": "research_uses_vector_search_with_prior_context",
         "section": "memory_cross_session",
-        "session_id": "MEMORY_SESSION",
+        "session_id": MEMORY_SESSION_ID,
     },
 ]
 

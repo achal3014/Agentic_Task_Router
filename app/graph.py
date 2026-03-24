@@ -5,7 +5,6 @@ This module defines the state machine that routes user requests through safety c
 task routing, and specialized agents (summarizer, QnA, translator).
 """
 
-import os
 from langgraph.graph import StateGraph, END
 from app.state import AgentState
 from app.agents.router_agent import route_task
@@ -18,6 +17,8 @@ from app.safety.suspicion_check import suspicion_check
 from app.cost.tracker import accumulate_cost, calculate_cost
 from app.llm import LLMServiceError
 from app.configs import ENABLE_TIER2, ENABLE_MEMORY, ROUTER_MODEL
+from app.memory.manager import should_store_in_vector
+from app.memory.vector_store import store_output
 
 # Read from environment - NO import yet
 GUARDRAILS_ENABLED = ENABLE_TIER2
@@ -119,6 +120,7 @@ def router_node(state: AgentState) -> AgentState:
         state["cost_usd"] = accumulate_cost(
             state.get("cost_usd"), calculate_cost(ROUTER_MODEL, router_tokens)
         )
+        print("Cost (USD) after router_node content exec:", state.get("cost_usd"))
 
         if router_output.task_type not in ["summarize", "qna", "translate", "research"]:
             state["task_type"] = "unsupported"
@@ -129,6 +131,14 @@ def router_node(state: AgentState) -> AgentState:
         state["task_type"] = "unsupported"
         state["routing_reasoning"] = "Router failed due to LLM error."
         state["error"] = str(e)
+
+    print(f"Task type: {state.get('task_type')}")
+    if state.get("has_document") and state.get("task_type") == "research":
+        state["task_type"] = "qna"
+        state["routing_reasoning"] = (
+            "Document provided — redirected from research to " + state["task_type"]
+        )
+        print(f"[router] Document guard triggered — redirected to {state['task_type']}")
     return state
 
 
@@ -178,7 +188,7 @@ def summarizer_node(state: AgentState) -> AgentState:
         state["cost_usd"] = accumulate_cost(
             state.get("cost_usd"), calculate_cost(model, tokens)
         )
-
+        print("Cost (USD) after summarizer_node content exec:", state.get("cost_usd"))
         if GUARDRAILS_ENABLED:
             # Import only when needed
             from app.guardrails.output_guard import (
@@ -228,6 +238,8 @@ def qna_node(state: AgentState) -> AgentState:
             state.get("cost_usd"), calculate_cost(model, tokens)
         )
 
+        print("Cost (USD) after qna_node content exec:", state.get("cost_usd"))
+
         if GUARDRAILS_ENABLED:
             # Import only when needed
             from app.guardrails.output_guard import validate_output
@@ -254,7 +266,6 @@ def qna_node(state: AgentState) -> AgentState:
     state["escalation_offer"] = True
 
     print("QNA NODE - escalation_offer being set to:", state.get("escalation_offer"))
-    print("QNA NODE - full state keys:", list(state.keys()))
 
     return state
 
@@ -268,7 +279,6 @@ def escalation_check_node(state: AgentState) -> AgentState:
         "ESCALATION CHECK NODE - escalation_offer in state:",
         state.get("escalation_offer"),
     )
-    print("ESCALATION CHECK NODE - full state:", dict(state))
     user_input = state.get("user_input", "").lower().strip()
 
     AFFIRMATIVES = [
@@ -314,6 +324,8 @@ def translator_node(state: AgentState) -> AgentState:
             state.get("cost_usd"), calculate_cost(model, tokens)
         )
 
+        print("Cost (USD) after translator_node content exec:", state.get("cost_usd"))
+
         if GUARDRAILS_ENABLED:
             # Import only when needed
             from app.guardrails.output_guard import validate_output
@@ -358,6 +370,8 @@ def research_node(state: AgentState) -> AgentState:
         state["cost_usd"] = accumulate_cost(
             state.get("cost_usd"), calculate_cost(model, tokens)
         )
+
+        print("Cost (USD) after research_node content exec:", state.get("cost_usd"))
 
         if GUARDRAILS_ENABLED:
             from app.guardrails.output_guard import validate_output
@@ -452,13 +466,24 @@ def memory_write_node(state: AgentState) -> AgentState:
         write_turn(session_id, "assistant", response)
     print(f"[memory] Wrote turn for session {session_id}")
 
-    # ChromaDB — only write meaningful outputs
-    from app.memory.manager import should_store_in_vector
-    from app.memory.vector_store import store_output
-
     if should_store_in_vector(task_type, response, error):
-        store_output(session_id, task_type, user_input, response)
-        print(f"[memory] Stored {task_type} output in vector store")
+        text_to_store = response
+        try:
+            from app.agents.summarizer_agent import summarize_text
+
+            summary, _, _ = summarize_text(
+                {
+                    "user_input": f"Summarize this concisely in 2-3 sentences:\n\n{response}",
+                    "conversation_history": [],
+                }
+            )
+            text_to_store = summary if summary and summary.strip() else response
+        except Exception:
+            # Fall back to storing response directly if summarization fails
+            text_to_store = response
+
+        store_output(session_id, task_type, user_input, text_to_store)
+        print(f"[memory] Stored summarized {task_type} output in vector store")
 
     return state
 

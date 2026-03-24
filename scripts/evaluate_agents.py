@@ -29,25 +29,49 @@ for case in EVAL_CASES:
     if session_id:
         payload["session_id"] = session_id
 
-    try:
-        response = requests.post(API_URL, json=payload, timeout=60)
+    # Longer timeout for research cases due to tool calls
+    timeout = 120 if case.get("section", "").startswith("research") else 60
 
+    try:
+        response = requests.post(API_URL, json=payload, timeout=timeout)
         output = response.json()
+
+        # Determine status correctly
+        is_safety_block = (
+            output.get("safety_flag") is True
+            and output.get("error") == "Blocked by Tier-1 safety rules."
+        )
+        is_expected_block = (
+            is_safety_block and case.get("expected_task") == "unsupported"
+        )
+
+        if response.status_code != 200:
+            status = "failed"
+        elif is_expected_block:
+            status = "success"
+        elif output.get("error") and output.get("task_type") not in ["unsupported"]:
+            status = "failed"
+        else:
+            status = "success"
+
+        # Resolve actual_task for safety-blocked cases
+        actual_task = output.get("task_type", "")
+        if not actual_task and is_safety_block:
+            actual_task = "unsupported"
 
         result = {
             "id": case["id"],
             "query": case["query"],
             "section": case.get("section"),
             "expected_task": case["expected_task"],
-            "actual_task": output.get("task_type", ""),
+            "actual_task": actual_task,
             "expected_behavior": case["expected_behavior"],
             "response": output.get("response"),
             "error": output.get("error"),
             "safety_flag": output.get("safety_flag"),
             "suspicion_flag": output.get("suspicion_flag"),
-            "status": "success",
+            "status": status,
             "timestamp": datetime.utcnow().isoformat(),
-            # new fields
             "confidence": output.get("confidence"),
             "escalation_offer": output.get("escalation_offer"),
             "escalation_confirmed": output.get("escalation_confirmed"),
@@ -84,7 +108,10 @@ for case in EVAL_CASES:
     print(
         f"Evaluated case {case['id']:>2} [{case['section']:<22}] → {result['status']}"
     )
-    time.sleep(0.5)
+
+    # Longer sleep for research cases to avoid ArXiv rate limiting
+    sleep_time = 3.0 if case.get("section", "").startswith("research") else 0.5
+    time.sleep(sleep_time)
 
 print(f"\nEvaluation completed. Results saved to {OUTPUT_FILE}")
 print("Run compute_metrics.py to see detailed breakdown.")

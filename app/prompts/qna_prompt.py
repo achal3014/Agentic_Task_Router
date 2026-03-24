@@ -26,7 +26,8 @@ RETRIEVED CONTEXT HANDLING:
 - Retrieved context is prior knowledge from past sessions — treat it as background reference only
 - Use retrieved context ONLY if it directly and clearly relates to the current question
 - Do NOT treat retrieved context as part of the current conversation
-- Do NOT reference retrieved context as "our previous conversation" unless it actually matches the current topic
+- NEVER reference retrieved context as "our previous conversation" or "prior conversation" — it is background reference only, never part of the current exchange
+- If the current input is a document to be processed, ignore retrieved context entirely and focus only on the document
 - If retrieved context is about a different topic than the current question, ignore it entirely
 - Always prioritize the current question and conversation history over retrieved context
 

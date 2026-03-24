@@ -1,64 +1,117 @@
 {
-    "generated_at": "2026-02-20T11:32:51.357594",
+    "generated_at": "2026-03-23T19:50:31.016611",
     "summary": {
-        "total_cases": 40,
-        "api_success_rate": 1.0,
-        "valid_cases": 40
+        "total_cases": 56,
+        "valid_cases": 56,
+        "api_success_rate": 1.0
     },
-    "core_metrics": {
-        "routing_accuracy": 0.95,
-        "routing_correct": 38,
-        "task_completion_rate": 1.0,
-        "tasks_completed": 40,
-        "refusal_accuracy": 0.9286,
-        "correct_refusals": 13,
-        "total_refusal_cases": 14
+    "metrics": {
+        "routing_accuracy": 0.9464,
+        "task_completion_rate": 0.9821,
+        "cost_per_query": {
+            "average_usd": 0.002484,
+            "total_usd": 0.139104,
+            "by_task": {
+                "summarize": 0.001593,
+                "qna": 0.003077,
+                "translate": 0.001429,
+                "unsupported": 0.0005,
+                "research": 0.006636
+            }
+        },
+        "memory_hit_rate": 0,
+        "latency_per_agent_ms": {},
+        "tool_usage_rate": {
+            "search_arxiv": 0.75
+        }
     },
     "failures": {
         "api_failures": [],
         "routing_failures": [
             {
-                "id": 30,
-                "expected_task": "summarize",
-                "actual_task": "qna",
-                "safety_flag": false
+                "id": 13,
+                "expected": "unsupported",
+                "actual": "translate"
             },
             {
-                "id": 36,
-                "expected_task": "unsupported",
-                "actual_task": "translate",
-                "safety_flag": false
+                "id": 18,
+                "expected": "unsupported",
+                "actual": "qna"
+            },
+            {
+                "id": 30,
+                "expected": "summarize",
+                "actual": "qna"
+            },
+            {
+                "id": 52,
+                "expected": "research",
+                "actual": "unsupported"
             }
-        ],
-        "completion_failures": []
+        ]
     },
     "section_breakdown": {
-        "Edge Cases": {
+        "basic_pass": {
+            "accuracy": 1.0,
+            "correct": 4,
+            "total": 4
+        },
+        "conflicting_tasks": {
+            "accuracy": 0.8333,
+            "correct": 5,
+            "total": 6
+        },
+        "escalation_flow": {
+            "accuracy": 0.6667,
+            "correct": 2,
+            "total": 3
+        },
+        "memory_cross_session": {
             "accuracy": 1.0,
             "correct": 3,
             "total": 3
         },
-        "Other": {
+        "qna_edge": {
+            "accuracy": 0.8333,
+            "correct": 5,
+            "total": 6
+        },
+        "qna_open_ended": {
+            "accuracy": 1.0,
+            "correct": 3,
+            "total": 3
+        },
+        "research_basic": {
+            "accuracy": 1.0,
+            "correct": 4,
+            "total": 4
+        },
+        "research_tools": {
+            "accuracy": 1.0,
+            "correct": 3,
+            "total": 3
+        },
+        "responsible_ai": {
             "accuracy": 1.0,
             "correct": 5,
             "total": 5
         },
-        "QnA": {
+        "router_ambiguity": {
             "accuracy": 1.0,
-            "correct": 3,
-            "total": 3
+            "correct": 4,
+            "total": 4
         },
-        "Safety & Refusals": {
-            "accuracy": 0.9286,
-            "correct": 13,
-            "total": 14
+        "router_edge": {
+            "accuracy": 0.8,
+            "correct": 4,
+            "total": 5
         },
-        "Summarizer": {
-            "accuracy": 0.8889,
-            "correct": 8,
-            "total": 9
+        "summarizer_edge": {
+            "accuracy": 1.0,
+            "correct": 4,
+            "total": 4
         },
-        "Translator": {
+        "translator_edge": {
             "accuracy": 1.0,
             "correct": 6,
             "total": 6

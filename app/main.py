@@ -23,9 +23,20 @@ graph = build_graph()
 
 @app.post("/route", response_model=APIResponse)
 def route_request(request: APIRequest):
+
+    # Resolve document text
+    # document field in APIRequest carries pre-extracted text from frontend
+    document_text = request.document.strip() if request.document else None
+    has_document = bool(document_text)
+
+    # If document provided, append it to user_input so agents see it naturally
+    user_input = request.user_input
+    if document_text:
+        user_input = f"{request.user_input}\n\nDocument:\n{document_text}"
+
     initial_state = {
         "session_id": get_or_create_session_id(request.session_id),
-        "user_input": request.user_input,
+        "user_input": user_input,
         "task_type": "",
         "routing_reasoning": "",
         "response": "",
@@ -42,6 +53,8 @@ def route_request(request: APIRequest):
         "conversation_history": None,
         "retrieved_context": None,
         "tools_called": None,
+        "document": document_text,
+        "has_document": has_document,
     }
 
     start_time = time.time()

@@ -33,6 +33,8 @@ def log_decision(state: AgentState, latency_ms: int) -> Dict[str, Any]:
         "model_used": state.get("model_used"),
         "tokens_used": state.get("tokens_used"),
         "latency_ms": latency_ms,
+        "tools_called": state.get("tools_called"),
+        "cost_usd": state.get("cost_usd"),
     }
 
     # Ensure logs directory exists
@@ -40,6 +42,6 @@ def log_decision(state: AgentState, latency_ms: int) -> Dict[str, Any]:
 
     # Append log entry
     with open(LOG_PATH, "a", encoding="utf-8") as f:
-        f.write(json.dumps(log_entry, ensure_ascii=False, indent=2) + "\n")
+        f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
 
     return log_entry

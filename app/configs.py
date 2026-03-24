@@ -37,7 +37,9 @@ REDIS_PORT = int(config["MEMORY"]["REDIS_PORT"])
 REDIS_TTL_SECONDS = int(config["MEMORY"]["REDIS_TTL_SECONDS"])
 VECTOR_STORE_PATH = config["MEMORY"]["VECTOR_STORE_PATH"]
 HISTORY_TURNS = int(config["MEMORY"]["HISTORY_TURNS"])
-
+SIMILARITY_THRESHOLD = float(config["MEMORY"]["SIMILARITY_THRESHOLD"])
+TOPIC_CHANGE_THRESHOLD = float(config["MEMORY"]["TOPIC_CHANGE_THRESHOLD"])
+MIN_RESPONSE_LENGTH = int(config["MEMORY"]["MIN_RESPONSE_LENGTH"])
 # ─────────────────────────────────────────────
 # Tools
 # ─────────────────────────────────────────────

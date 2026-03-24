@@ -7,7 +7,6 @@ TTL is applied on every write to keep sessions from persisting forever.
 """
 
 import json
-from typing import Optional
 import redis
 from app.configs import REDIS_HOST, REDIS_PORT, REDIS_TTL_SECONDS, HISTORY_TURNS
 
@@ -32,6 +31,7 @@ def write_turn(session_id: str, role: str, content: str) -> None:
     turn = json.dumps({"role": role, "content": content})
     client.rpush(key, turn)
     client.expire(key, REDIS_TTL_SECONDS)
+    client.ltrim(key, -HISTORY_TURNS * 2, -1)
 
 
 def read_history(session_id: str, last_n: int = HISTORY_TURNS) -> list[dict]:

@@ -12,6 +12,7 @@ class RouterOutput(BaseModel):
 class APIRequest(BaseModel):
     user_input: str
     session_id: Optional[str] = None
+    document: Optional[str] = None
 
 
 class APIResponse(BaseModel):

@@ -94,32 +94,56 @@ avg_cost_by_task = {task: round(sum(v) / len(v), 6) for task, v in cost_by_task.
 # -------------------------
 # 4. MEMORY HIT RATE
 # -------------------------
-memory_requests = [
-    r
-    for r in api_successes
-    if r.get("section") in ("memory_cross_session", "escalation_flow")
-]
-memory_hits = [
-    r
-    for r in memory_requests
-    if r.get("retrieved_context")
-    or (r.get("response") and "prior" in (r.get("response") or "").lower())
-]
+memory_hit_rate = 0
+memory_hits = 0
+memory_total = 0
 
-# Simpler signal — check if tools_called contains vector_search
-vector_search_used = [
-    r
-    for r in api_successes
-    if r.get("tools_called") and "vector_search" in (r.get("tools_called") or [])
-]
-research_cases = [r for r in api_successes if r.get("actual_task") == "research"]
-memory_hit_rate = len(vector_search_used) / len(research_cases) if research_cases else 0
+try:
+    import os
+
+    LOG_PATH = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "logs",
+        "decisions.json",
+    )
+    if os.path.exists(LOG_PATH):
+        with open(LOG_PATH, "r", encoding="utf-8") as f:
+            log_entries = []
+            for line in f:
+                try:
+                    log_entries.append(json.loads(line))
+                except Exception:
+                    pass
+
+        for entry in log_entries:
+            if entry.get("task_type") in ("qna", "research", "summarize"):
+                memory_total += 1
+                if entry.get("retrieved_context"):
+                    memory_hits += 1
+
+        memory_hit_rate = memory_hits / memory_total if memory_total else 0
+    else:
+        # Fallback — check memory/escalation sections for responses referencing prior context
+        memory_section_cases = [
+            r
+            for r in api_successes
+            if r.get("section") in ("memory_cross_session", "escalation_flow")
+        ]
+        context_hits = [
+            r
+            for r in memory_section_cases
+            if r.get("response") and "prior" in (r.get("response") or "").lower()
+        ]
+        memory_total = len(memory_section_cases)
+        memory_hits = len(context_hits)
+        memory_hit_rate = memory_hits / memory_total if memory_total else 0
+
+except Exception:
+    memory_hit_rate = 0
 
 # -------------------------
 # 5. LATENCY PER AGENT
 # -------------------------
-# Note: latency not currently in evaluation results
-# — computed from log file if available, otherwise skipped
 latency_by_task = {}
 try:
     import os
@@ -150,10 +174,12 @@ except Exception:
 # -------------------------
 # 6. TOOL USAGE RATE
 # -------------------------
+RESEARCH_TOOLS = {"wikipedia", "search_arxiv", "web_search"}
+
 all_tools_called = []
 for r in api_successes:
     tools = r.get("tools_called") or []
-    all_tools_called.extend(tools)
+    all_tools_called.extend([t for t in tools if t in RESEARCH_TOOLS])
 
 tool_counts = defaultdict(int)
 for tool in all_tools_called:
@@ -176,7 +202,7 @@ print(
     f"API success rate: {len(api_successes) / total_cases:.2%}  ({len(api_successes)}/{total_cases})"
 )
 
-print(f"\n--- 1. Routing Accuracy ---")
+print("\n--- 1. Routing Accuracy ---")
 print(f"  {routing_accuracy:.2%}  ({correct_routing}/{valid_cases} correct)")
 if routing_failures:
     for rf in routing_failures:
@@ -184,35 +210,35 @@ if routing_failures:
             f"  FAIL ID {rf['id']:>2} | expected={rf['expected']:<12} actual={rf['actual']}"
         )
 
-print(f"\n--- 2. Task Completion Rate ---")
+print("\n--- 2. Task Completion Rate ---")
 print(f"  {task_completion_rate:.2%}  ({completed_tasks}/{valid_cases} completed)")
 
-print(f"\n--- 3. Cost Per Query ---")
+print("\n--- 3. Cost Per Query ---")
 print(f"  Average : ${avg_cost:.6f}")
 print(f"  Total   : ${total_cost:.6f}")
 for task, cost in sorted(avg_cost_by_task.items()):
     print(f"  {task:<12}: ${cost:.6f}")
 
-print(f"\n--- 4. Memory Hit Rate ---")
+print("\n--- 4. Memory Hit Rate ---")
 print(
-    f"  {memory_hit_rate:.2%}  ({len(vector_search_used)}/{len(research_cases)} research requests used vector search)"
+    f"  {memory_hit_rate:.2%}  ({memory_hits}/{memory_total} requests retrieved prior context)"
 )
 
-print(f"\n--- 5. Latency Per Agent (ms) ---")
+print("\n--- 5. Latency Per Agent (ms) ---")
 if latency_by_task:
     for task, avg_ms in sorted(latency_by_task.items()):
         print(f"  {task:<12}: {avg_ms} ms avg")
 else:
     print("  Enable logging (ENABLE_LOGGING=true) to capture latency data")
 
-print(f"\n--- 6. Tool Usage Rate ---")
+print("\n--- 6. Tool Usage Rate ---")
 if tool_usage_rate:
     for tool, rate in sorted(tool_usage_rate.items()):
         print(f"  {tool:<20}: {rate:.2%} of research requests")
 else:
     print("  No tool usage data found")
 
-print(f"\n--- Section Breakdown ---")
+print("\n--- Section Breakdown ---")
 sections = defaultdict(lambda: {"total": 0, "correct": 0})
 for r in api_successes:
     section = r.get("section", "unknown")
@@ -228,7 +254,7 @@ for section, stats in sorted(sections.items()):
     print(f"  {section:<25}: {acc:.1%}  ({stats['correct']}/{stats['total']})")
 
 if api_failures:
-    print(f"\n--- API Failures ---")
+    print("\n--- API Failures ---")
     for f in api_failures:
         print(f"  ID {f['id']:>2} | {f.get('error')}")
 
